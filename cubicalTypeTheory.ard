@@ -1,0 +1,633 @@
+
+
+-- Defining Data types
+
+-- data type with 3 constructors
+\data T | c1 | c2 | c3
+
+\data Bool | true | false
+
+-- data type where constructors have arguments
+\data T2 | c4 Int | c5 Bool | c6 Int Bool
+
+-- data type with at type parameter
+\data T3 \Type | c7 | c8
+
+\func ex_T3 : T3 Int => c7
+
+-- binding the type parameter to a literal to use in construtors
+\data T4 (A : \Type) | c9 | c10 A
+
+\func ex_T4 : T4 Nat => c10 8
+
+
+
+-- Defining functions
+
+-- All functions in Arend must be total and terminate.
+
+-- constant functions or values
+\func ex_val : Int => 7
+
+\func ex_val' : \Type => Int
+\func ex_val'' : \Type 2 => \Type 1
+
+-- function with explicit parameters
+\func ex_fun (a : Int) : Int => a
+
+-- function with an implicit type parameter and an explicit value parameter
+\func id {A : \Type} (a : A) : A => a
+\func ex_id : Int => id 8
+
+-- function defined with pattern matching
+\func not (b : Bool) : Bool
+  | true => false
+  | false => true
+
+-- equivalently
+\func not' (b : Bool) : Bool \elim b
+  | true => false
+  | false => true
+
+
+-- chosing the argument to pattern match on
+\func if {A : \Type} (b : Bool) (t e : A) : A \elim b
+  | true => t
+  | false => e
+
+
+
+-- dependent types
+\data Hold {A : \Type} (a : A) | hold
+
+\func test_hold : Hold 7 => hold
+\func test_hold' : Hold true => hold
+
+-- dependent type, pair
+\func dependent_pair : \Sigma Bool Int => (true,7)
+
+
+\func ift (cond : Bool): \Type \elim cond
+  | true => Nat
+  | false => Bool
+
+\func test_true  : \Sigma (b : Bool) (ift b) => (true, 7)
+\func test_false : \Sigma (b : Bool) (ift b) => (false, false)
+
+
+
+-- lambdas
+\func ex_lambda {A : \Type} : A -> Int => \lam (a : A) => 7
+
+
+
+
+\func dependent_function : \Pi {A : \Type }(a : A) -> Hold a => (\lam _ => hold)
+
+\func test_dep_fun : Hold true => dependent_function true
+\func test_dep_fun' : Hold Bool => dependent_function Bool
+
+
+-- all natural numbers less than n
+\data Fin (n : Nat) \with
+  | suc n => { fzero | fsuc (Fin n) }
+
+\func ex_Fin : Fin 4 => fzero  -- 0
+\func ex_Fin' : Fin 4 => fsuc fzero -- 1
+\func ex_Fin'' : Fin 4 => fsuc (fsuc fzero) -- 2
+\func ex_Fin''' : Fin 4 => fsuc (fsuc (fsuc fzero)) -- 3
+-- \func ex_Fin'''' : Fin 4 => fsuc (fsuc (fsuc (fsuc fzero))) -- 4, doesn't typecheck
+
+
+
+
+
+-- first elementary proof!
+-- Predicate on natural numbers
+\data Even (n : Nat) \with
+  | zero => even_z
+  | suc (suc m) => even_ss (Even m)
+
+
+-- 4 is even
+\func even_4 : Even 4 => even_ss {?}
+
+
+-- Defining a typeclass (haskell style typeclasses)
+
+
+\class Lucky (A : \Type ) {
+  | roll : A -> Int
+}
+
+-- Defining an instance
+\data Dice | die
+
+\instance Lucky-Dice : Lucky Dice
+  | roll => \lam _ => 5
+
+
+-- testing values with equality?
+-- not false = true
+
+
+
+-- Equality Type
+
+{-
+  Equality is a complex topic in Arend, but we will keep it simple here.
+
+  For some type A and a : A, there is a type a = a
+
+  This is an example of a dependent type. There is a value in the Type.
+  ex)
+    Bool has two terms: True, False.
+
+    So there are 2 types,
+      True = True
+      and
+      False = False
+
+  How do you construct a term of this type?
+
+  There is a built in term `idp`.
+
+  ex)
+ -}
+
+\func true_eq_true : true = true => idp
+\func false_eq_fasle : false = false => idp
+
+-- idp represents the reflexive property of equality, for all a : A, a is always equal to itself.
+-- you could call if `reflexivity` or `refl` for short if you like
+
+\func reflexivity {A : \Type} (a : A) : a = a => idp
+
+\func simple_fact : 2 = 2 => reflexivity 2
+
+
+-- idp can also relate two equal terms that are equivalent by computation (definitional equality)
+-- for example,  not (true) reduces to false
+-- so we can use `idp` to equate not (true) and false
+
+\func not_true_eq_false : not true = false => idp
+
+-- another classic example using addition
+-- 2 + 2 reduces to 4 by computaiton, so we can equate 2 + 2 and 4
+
+\func simple_math : (2 Nat.+ 2) = 4 => idp
+
+
+
+{-
+  Where does this 'magic' idp term come from?
+
+  In Arend, we reason about equality using an abstract Interval type.
+  \data I | left | right
+          ( this isn't the full definition, but this is what's relevant now)
+          ( the interval is a type with special rule, ex) you cant pattern match on it)
+
+  An interval has two endpoints, left and right.
+
+  When we say things are equal in Arend, we are saying there is a `path` between them.
+
+  for example,
+    lets say we have a : A and b : A where a = b,
+    then there is a path from a to b.
+
+    The left endpoint of the path is a.
+    the right endpoint of the path is b.
+
+  lets call the path between a and b, p. denoted p : a = b
+
+  We can observe the endpoint of the path with `@`.
+
+  for example
+    p @ left is a
+    p @ right is b
+
+ -}
+
+\func left_endpoint_is_a {A : \Type} {a b : A} (p : a = b) : (p @ left) = a => idp
+
+\func right_endpoint_is_b {A : \Type} {a b : A} (p : a = b) : (p @ right) = b => idp
+
+-- we create paths by abstracting over the interval type
+
+\func path_a_a {A : \Type} (a : A) : a = a =>
+  path(\lam (i : I) => a)
+
+-- note that this lambda takes in an endpoint of the interval
+-- it maps left => a
+-- it maps right => a
+-- resulting in a path from a to a
+-- OR
+-- a = a
+
+\func idp' {A : \Type} (a : A) : a = a => path (\lam _ => a)
+
+-- This is the `magic` idp function we have been using.
+-- idp stands for "identity path" aka reflexivity
+
+
+-- for fun, this is just in one dimention
+-- line between points a a
+\func line {A : \Type} (a : A) : a = a => path(\lam i => a)
+
+-- path between lines, or a square
+\func square {A : \Type} (a : A) : line a = line a =>
+  path(\lam i => path(\lam j => a))
+
+-- path between squares, or a cube
+\func cube {A : \Type} (a : A) : square a = square a =>
+  path(\lam i => path(\lam j => path(\lam k => a)))
+
+-- index the identity cube at 1,0,1 (right, left, right)
+\func test_cube {A : \Type} (a : A) (cube : square a = square a) : A =>
+  cube @ right @ left @ right
+
+
+{- with that, we can enhance our lucky typclass to be more specific!
+   the implementation of the roll function must result in 7 every time
+ -}
+
+\class Lucky' (A : \Type)
+  -- a roll function maps all constructors of A to an integer
+  | roll : A -> Int
+  -- all rolls must result in 7! how lucky!
+  | lucky_roll (a : A) : roll a = 7
+
+
+\instance Lucky-Dice' : Lucky' Dice
+-- here we define the roll function to be a constant lambda, 7
+  | roll => \lam _ => 7
+-- and we prove that all rolls result in 7 using `idp`
+  | lucky_roll (d : Dice) => idp
+
+-- Raw typeclasses
+
+
+\module Raw \where {
+  \class Functor_raw (F : \Type -> \Type)
+    | fmap {A B : \Type} (f : A -> B) (fa : F A) : F B
+
+  \class Applicative_raw \extends Functor_raw
+    | pure {A : \Type} A : F A
+    | \infixl 4 <*> {A B : \Type} (fab : F (A -> B)) (fa : F A) : F B
+
+  \class Monad_raw \extends Applicative_raw
+    | flatMap {A B : \Type} (f : A -> F B) (fa : F A) : F B
+
+  -- show that Option is an instance of all of these
+
+  \data Option (A : \Type) | None | Some A \where {
+
+    -- functor
+
+    \func map {A B : \Type} (f : A -> B) (o : Option A) : Option B \elim o
+      | None => None
+      | Some a => Some (f a)
+
+    \instance Option-Functor : Functor_raw Option
+      | fmap => map
+
+    -- applicative
+
+    \func pure {A : \Type} (a : A) : Option A => Some a
+
+    \func \infixl 4 <*> {A B : \Type} (fab : Option (A -> B)) (fa : Option A) : Option B \elim fab
+      | None => None
+      | Some f => map f fa
+
+    \instance Option-Applicative (f : Functor_raw Option) : Applicative_raw Option
+      | fmap => f.fmap
+    -- applicative
+      | pure => pure
+      | <*> => <*>
+
+    -- monad
+
+    \func flatMap {A B : \Type} (f : A -> Option B) (fa : Option A) : Option B \elim fa
+      | None => None
+      | Some a => f a
+
+    \instance Option-Monad (f : Applicative_raw Option) : Monad_raw Option
+    -- functor
+      | fmap => f.fmap
+    -- applicative
+      | pure => f.pure
+      | <*> => f.<*>
+    -- monad
+      | flatMap => flatMap
+  }
+}
+
+-- but then add the laws
+
+\module Laws \where {
+
+  -- helpers
+  -- composition
+  \func \infixr 8 o {A B C : \Type} (g : B -> C) (f : A -> B) => \lam x => g (f x)
+
+  \func id {A : \Type} => \lam (x : A) => x
+  --
+
+
+
+  \class Functor (F : \Type -> \Type)
+    | fmap {A B : \Type} (f : A -> B) (fa : F A) : F B
+    -- laws
+    | fmap-id {A : \Type} (y : F A) : fmap id y = y
+    | fmap-comp {A B C : \Type} (f : A -> B) (g : B -> C) (y : F A) : fmap (g o f) y = (fmap g  o fmap f) y
+
+
+  \class Applicative \extends Functor
+    | pure {A : \Type} A : F A
+    | \infixl 4 <*> {A B : \Type} (fab : F (A -> B)) (fa : F A) : F B
+    -- laws
+    | pure-id {A : \Type} (a : F A) : pure id <*> a = a
+    | pure-hom {A B : \Type} (f : A -> B) (a : A) : pure f <*> pure a = pure (f a)
+
+  \class Monad \extends Applicative {
+    | mpure {A : \Type} A : F A
+    | flatMap {A B : \Type} (f : A -> F B) (fa : F A) : F B
+    -- laws
+    | right-unit {A B : \Type} (f : A -> F B) (a : A) : flatMap f (mpure a) = f a
+    | left-unit {A B : \Type} (f : A -> F B) (a : F A) : flatMap mpure a = a
+    | m-assoc {A B C : \Type} (f : A -> F B) (g : B -> F C) (a : F A) : (flatMap g  o flatMap f) a = flatMap (flatMap g o f) a
+  }
+
+
+
+  \data Option (A : \Type) | None | Some A \where {
+
+    -- functor
+    \func map {A B : \Type} (f : A -> B) (o : Option A) : Option B \elim o
+      | None => None
+      | Some a => Some (f a)
+
+    -- proofs of functor laws
+    \func map-id {A : \Type} (o : Option A) : map id o = o \elim o
+      | None => idp
+      | Some a => idp
+
+    \func map-comp {A B C :\Type} (f : A -> B) (g : B -> C) (oa : Option A) : map (g o f) oa = (map g o map f) oa \elim oa
+      | None => idp
+      | Some a => idp
+
+    -- functor instance with laws
+    \instance Option-Functor : Functor Option
+      | fmap => map
+      -- proofs of laws
+      | fmap-id  => map-id
+      | fmap-comp => map-comp
+
+
+    \func pure {A : \Type} (a : A) : Option A => Some a
+
+    \func \infixl 4 <*> {A B : \Type} (fab : Option (A -> B)) (fa : Option A) : Option B \elim fab
+      | None => None
+      | Some f => map f fa
+
+    -- proofs of applicative laws
+    \func pure-id {A : \Type} (a : Option A) : pure id <*> a = a \elim a
+      | None => idp
+      | Some a => idp
+
+    \func pure-hom {A B : \Type} (f : A -> B) (a : A) : pure f <*> pure a = pure (f a) => idp
+
+    -- applicative instance with laws
+    \instance Option-Applicative (f : Functor Option) : Applicative Option
+      -- functor
+      | fmap => f.fmap
+      | fmap-id => f.fmap-id
+      | fmap-comp => f.fmap-comp
+      -- applicative
+      | pure => pure
+      | <*> => <*>
+      | pure-id => pure-id
+      | pure-hom => pure-hom
+
+
+    -- Monad
+
+    \func mpure {A : \Type} (a : A) : Option A => Some a
+
+    \func flatMap {A B : \Type} (f : A -> Option B) (fa : Option A) : Option B \elim fa
+      | None => None
+      | Some a => f a
+
+    -- proofs of monad laws
+
+
+    \func right-unit {A B : \Type} (f : A -> Option B) (a : A) : flatMap f (mpure a) = f a => idp
+
+    \func left-unit {A B : \Type} (f : A -> Option B) (ma : Option A) : flatMap mpure ma = ma \elim  ma
+      | None => idp
+      | Some a => idp
+
+    \func m-assoc {A B C : \Type} (f : A -> Option B) (g : B -> Option C) (a : Option A) : (flatMap g o flatMap f) a = flatMap (flatMap g o f) a \elim a
+      | None => idp
+      | Some a => idp
+
+
+    \instance Option-Monad (a : Applicative Option) : Monad Option
+      -- functor
+      | fmap => a.fmap
+      | fmap-id => a.fmap-id
+      | fmap-comp => a.fmap-comp
+      -- applicative
+      | pure => a.pure
+      | <*> => a.<*>
+      | pure-id => a.pure-id
+      | pure-hom => a.pure-hom
+      -- monad
+      | mpure => mpure
+      | flatMap => flatMap
+      | right-unit => right-unit
+      | left-unit => left-unit
+      | m-assoc => m-assoc
+  }
+
+}
+
+
+-- Option was easy type to prove, most things held by simple 'idp'
+-- what about some more interesting proofs?
+
+\func pmap {A B : \Type} {a a' : A} (f : A -> B) (p : a = a') : f a = f a' =>
+  path(\lam i => f (p @ i))
+
+
+\func plus_assoc (n m k : Nat) : (n Nat.+ m) Nat.+ k = n Nat.+ (m Nat.+ k) \elim k
+  | zero => idp
+  | suc x => pmap suc (plus_assoc n m x)
+
+
+\module FList \where {
+
+  \func \infixr 8 o {A B C : \Type} (g : B -> C) (f : A -> B) => \lam x => g (f x)
+
+  \func id {A : \Type} => \lam (x : A) => x
+
+  \class Functor (F : \Type -> \Type)
+    | fmap {A B : \Type} (f : A -> B) (fa : F A) : F B
+    -- laws
+    | fmap-id {A : \Type} (y : F A) : fmap id y = y
+    | fmap-comp {A B C : \Type} (f : A -> B) (g : B -> C) (y : F A) : fmap (g o f) y = (fmap g  o fmap f) y
+
+
+  \data List (A : \Type) | nil | \infix 5 :: A (List A)
+
+  \func map {A B : \Type} (f : A -> B) (as : List A) : List B \elim  as
+    | nil => nil
+    | :: x xs => :: (f x) (map f xs)
+
+
+  \func map-id {A : \Type} (as : List A) : map id as = as
+    | nil => idp
+    | :: x xs => pmap (\lam a => :: x a) (map-id xs)
+
+  \func map-comp {A B C : \Type} (f : A -> B) (g : B -> C) (as : List A) : map (g o f) as = (map g o map f) as \elim  as
+    | nil => idp
+    | :: x xs =>  pmap (\lam r => :: (g (f x)) r) (map-comp f g xs)
+}
+
+
+
+
+-- doing math, here is a category
+
+\class Category (Ob : \Type) {
+| Hom : Ob -> Ob -> \Set
+| id (x : Ob) : Hom x x
+| \fixr 8 o {x y z : Ob} : Hom y z -> Hom x y -> Hom x z
+| id-left {x y : Ob} (f : Hom x y) : f `o` id x = f
+| id-right {x y : Ob} (f : Hom x y) : id y `o` f = f
+| o-assoc {x y z w : Ob} (f : Hom x y) (g : Hom y z) (h : Hom z w) : h `o` (g `o` f) = (h `o` g) `o` f
+
+\func \infixl 8 >> {x y z : Ob} (f : Hom x y) (g : Hom y z) => g `o` f
+}
+
+\func test : \Type 1 => \Set
+
+-- This definition states that \Set (which is a universe of types) is a category.
+-- Objects of this category are Types in \Set
+-- morphisms are functions between Types in \Set
+\instance SetCat : Category \Set
+  -- The function type represents the type of morphisms in this category
+  | Hom X Y => X -> Y
+  -- this is the polymorphic definition of id morphisms for this category
+  | id _ => \lam x => x
+  -- this is the polymorphic definition of composition for this category.
+  | o g f => \lam x => (g (f x))
+  | id-left f => idp
+  | id-right f => idp
+  | o-assoc f g h => idp
+
+
+-- Higher inductive type
+
+-- Higher inductive types allow for stating equality between elements of a type
+-- Here we define the Integers using the Naturals.
+-- Without HITs, there would be two representaitons of zero in this type. neg zero and pos zero
+-- With HIT we can explicity state that neg zero and pos zero are equal elements.
+
+\data Int'
+  | neg Nat
+  | pos Nat
+  | zeq I \with {
+    | left => neg zero
+    | right => pos zero
+  }
+-- Before HITs, people used Setoids and Quotient types, but their rewrite laws proved to be cumbersome.
+
+-- Demonstration of tranport
+
+-- what if we have two types that are equivalent? Can we show that they are?
+
+\data Bool1 | tt1 | ff1
+\data Bool2 | tt2 | ff2
+
+-- these two types are basically the same!
+-- we can get a proof that these two type are equal if we have an isomorphism between them
+-- an isomorphism is a pair of function which are mutual inverses.
+
+-- function from Bool1 to Bool2
+\func Bool1_to_Bool2 (b : Bool1) : Bool2
+  | tt1 => tt2
+  | ff1 => ff2
+
+-- function from Bool2 to Bool1
+\func Bool2_to_Bool1 (b : Bool2) : Bool1
+  | tt2 => tt1
+  | ff2 => ff1
+
+-- prove that they are inverses of eachother
+\func Bool1_to_Bool2_to_Bool1 (b : Bool1) : Bool2_to_Bool1 (Bool1_to_Bool2 b) = b
+  | tt1 => idp
+  | ff1 => idp
+
+\func Bool2_to_Bool1_to_Bool2 (b : Bool2) : Bool1_to_Bool2 (Bool2_to_Bool1 b) = b
+  | tt2 => idp
+  | ff2 => idp
+
+-- Given an isomorpism between the types, construct a proof of equality
+\func Bool1=Bool2 : Bool1 = Bool2 =>
+  path(iso Bool1_to_Bool2 Bool2_to_Bool1 Bool1_to_Bool2_to_Bool1 Bool2_to_Bool1_to_Bool2)
+
+-- If Bool1 and Bool2 are equal, can we show types defined over these types equivalent?
+-- ex) can we show Option Bool1 = Option Bool2?
+-- yes!
+\data Option (A : \Type) | None | Some A
+
+\func Option_Bool1=Option_Bool2 : Option Bool1 = Option Bool2 =>
+  path(\lam i => Option (Bool1=Bool2 @ i))
+
+
+-- what about functions?
+-- if we have not1 defined on Bool1, can we get not2 defined on Bool2?
+-- Yes! (but in Arend, the resulting not2 does not reduce (yet), but in cubical Agda, this would behave as expected)
+
+-- first define the not function on Bool1
+\func not1 (b : Bool1) : Bool1
+  | tt1 => ff1
+  | ff1 => tt1
+
+-- Then we can use transport to lift this definition to Bool2
+\func transport { A : \Type } ( B : A -> \Type) { a a' : A} (p : a = a' ) (b : B a)
+  : B a' => coe (\lam i => B (p @ i)) b right
+
+-- how?
+-- we specify the type of the thing we are transporing, here a function from X -> X or Bool2 -> Bool2
+-- we specify the path to tranport over, here Bool1=Bool2
+-- we specify what definition to transport, here not1
+\func not2' : Bool2 -> Bool2 => transport (\lam X => X -> X) Bool1=Bool2 not1
+
+-- using the result, we can rewrite it to...
+\func not2 (b : Bool2) : Bool2 => not2' b
+
+
+-- what about a function on Option Bool1 to Option Bool2? Can we transport that as well?
+-- yes! :)
+\func not1_option (b : Option Bool1) : Option Bool1
+  | None => None
+  | Some tt1 => Some ff1
+  | Some ff1 => Some tt1
+
+\func not2_option' : Option Bool2 -> Option Bool2 =>
+  transport (\lam X => X -> X) Option_Bool1=Option_Bool2 not1_option
+
+
+
+-- Wrapping up
+{-
+
+Agda has runtime (haskell, javascript)
+Coq has a tactic language
+
+This isnt a traditional programming tool.
+
+Meant to express ideas! (which can later influence code in other languages!)
+ -}
